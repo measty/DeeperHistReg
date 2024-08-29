@@ -25,10 +25,16 @@ Possible compression: JPEG, DEFLATE, PACKBITS, CCITTFAX4, LZW, WEBP, ZSTD, JP2K
 """
 
 default_params = {
-    'compression' : 'lzw', #'deflate', # "lzw" "jpeg"
+    'compression' : 'jpeg', #'deflate', # "lzw" "jpeg"
     'pyramid' : True,
     'bigtiff' : True,
     'strip' : False,
+    'tile': True,
+    #"xres":1000/save_resolution[0],
+    #"yres":1000/save_resolution[1], 
+    #"resunit": "cm", 
+    "tile_width": 512, 
+    "tile_height": 512,
     # 'depth' : pyvips.enums.ForeignDzDepth.ONETILE, 
     # 'depth' : pyvips.enums.ForeignDzDepth.ONEPIXEL,
 }

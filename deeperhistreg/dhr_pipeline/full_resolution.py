@@ -25,6 +25,7 @@ from dhr_input_output.dhr_loaders import vips_loader
 from dhr_input_output.dhr_loaders import pil_loader
 from dhr_input_output.dhr_loaders import openslide_loader
 from dhr_input_output.dhr_loaders import pair_full_loader
+from dhr_input_output.dhr_loaders import ttb_loader
 
 from dhr_input_output.dhr_savers import pil_saver
 from dhr_input_output.dhr_savers import tiff_saver
@@ -36,7 +37,8 @@ loader_mapper = {
     'tiff' : tiff_loader.TIFFLoader,
     'vips' : vips_loader.VIPSLoader,
     'pil' : pil_loader.PILLoader,
-    'openslide' : openslide_loader.OpenSlideLoader
+    'openslide' : openslide_loader.OpenSlideLoader,
+    'tiatoolbox' : ttb_loader.TTBSlideLoader
 }
     
 saver_mapper = {
@@ -277,7 +279,7 @@ class DeeperHistReg_FullResolution():
                 saver = saver_mapper[self.registration_parameters['saving_params']['final_saver']],
                 level = self.registration_parameters['loading_params']['final_level'],
                 pad_value = self.registration_parameters['loading_params']['pad_value'],
-                save_source_only = True,
+                save_source_only = False,
                 to_template_shape = True)
             if self.logging_path is not None:
                 self.logger.info(f"Final images saved.")
