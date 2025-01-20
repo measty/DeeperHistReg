@@ -74,7 +74,8 @@ class OpenSlideLoader(WSILoader):
                 if desired_height > resolution[0] or desired_width > resolution[1]:
                     break
                 current_level = i
-            return pyvips.Image.tiffload(self.image_path, page=current_level), current_level
+            #return pyvips.Image.tiffload(self.image_path, page=current_level), current_level
+            return pyvips.Image.openslideload(self.image_path, level=current_level), current_level
 
     def update_resample_ratio(self, resample_ratio : float, level_to_use : int) -> float:
         """
@@ -96,11 +97,11 @@ class OpenSlideLoader(WSILoader):
         smoothed_image = image.gaussblur(sigma)
         resampled_image = smoothed_image.resize(resample_ratio, kernel='linear', vscale=resample_ratio)
         if self.mode == LoadMode.NUMPY:
-            array = resampled_image.numpy()
+            array = resampled_image[0:3].numpy()
         elif self.mode == LoadMode.PYTORCH:
-            array = u.image_to_tensor(resampled_image.numpy())
+            array = u.image_to_tensor(resampled_image[0:3].numpy())
         elif self.mode == LoadMode.PYVIPS:
-            array = resampled_image
+            array = resampled_image[0:3]
         else:
             raise ValueError("Unsupported mode.")
         return array
@@ -150,9 +151,9 @@ class OpenSlideLoader(WSILoader):
         """
         image = pyvips.Image.openslideload(self.image_path, level=level)
         if self.mode == LoadMode.NUMPY:
-            array = image.numpy()
+            array = image[0:3].numpy()
         elif self.mode == LoadMode.PYTORCH:
-            array = u.image_to_tensor(image.numpy())
+            array = u.image_to_tensor(image[0:3].numpy())
         elif self.mode == LoadMode.PYVIPS:
             array = image[0:3]
         else:

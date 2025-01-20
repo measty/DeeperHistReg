@@ -37,13 +37,13 @@ def run_registration(**config):
         os.makedirs(save_path)
 
     ### Run Registration ###
-    try:
-        registration_parameters['logging_path'] = pathlib.Path(save_path) / "logs.txt"
-        registration_parameters['case_name'] = experiment_name
-        pipeline = fr.DeeperHistReg_FullResolution(registration_parameters)
-        pipeline.run_registration(source_path, target_path, save_path)
-    except Exception as e:
-        print(f"Exception: {e}")
+    #try:
+    registration_parameters['logging_path'] = pathlib.Path(save_path) / "logs.txt"
+    registration_parameters['case_name'] = experiment_name
+    pipeline = fr.DeeperHistReg_FullResolution(registration_parameters)
+    pipeline.run_registration(source_path, target_path, save_path)
+    #except Exception as e:
+        #print(f"Exception: {e}")
 
     ### Copy Outputs and Clean ###
     if registration_parameters['save_final_images']:

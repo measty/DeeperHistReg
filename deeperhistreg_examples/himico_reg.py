@@ -9,9 +9,9 @@ import deeperhistreg
 
 def run():
     ### Define Inputs/Outputs ###
-    source_path : Union[str, pathlib.Path] = Path(r"E:\HIMICO\Janssen\slides\B-1989502_B11_HE.mrxs")
-    target_path : Union[str, pathlib.Path] = Path(r"E:\HIMICO\Janssen\slides\B-1989502_B11_CDX2p_MUC2y_MUC5g_CD8dab.mrxs")
-    output_path : Union[str, pathlib.Path] = Path(r"E:\HIMICO\Janssen\reg")
+    source_path : Union[str, pathlib.Path] = Path(r"/media/u2071810/Extra Data/HIMICO/slides/B-1989502_B11_HE.mrxs")
+    target_path : Union[str, pathlib.Path] = Path(r"/media/u2071810/Extra Data/HIMICO/slides/B-1989502_B11_HE_CDX2p_MUC2y_MUC5g_CD8dab.mrxs")
+    output_path : Union[str, pathlib.Path] = Path(r"/media/u2071810/Extra Data/HIMICO/Janssen/reg")
 
     ### Define Params ###
     registration_params : dict = deeperhistreg.configs.default_nonrigid_high_resolution() # Alternative: # registration_params = deeperhistreg.configs.load_parameters(config_path) # To load config from JSON file
@@ -22,15 +22,15 @@ def run():
     temporary_path : Union[str, pathlib.Path] = output_path / "temp" # Will use default if set to None
 
     # modify defaults
-    registration_params["loading_params"]['loader'] = 'tiatoolbox'
+    registration_params["loading_params"]['loader'] = 'openslide'
     registration_params["loading_params"]['source_resample_ratio'] = 0.05
     registration_params["loading_params"]['target_resample_ratio'] = 0.05
-    registration_params["loading_params"]["final_level"] = 3
+    registration_params["loading_params"]["final_level"] = 0
 
     ### Create Config ###
     config = dict()
-    config['source_path'] = source_path
-    config['target_path'] = target_path
+    config['source_path'] = str(source_path)
+    config['target_path'] = str(target_path)
     config['output_path'] = output_path
     config['registration_parameters'] = registration_params
     config['case_name'] = case_name
