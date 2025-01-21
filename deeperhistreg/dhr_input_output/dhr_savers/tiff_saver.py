@@ -26,6 +26,7 @@ Possible compression: JPEG, DEFLATE, PACKBITS, CCITTFAX4, LZW, WEBP, ZSTD, JP2K
 
 default_params = {
     'compression' : 'jpeg', #'deflate', # "lzw" "jpeg"
+    'Q' : 80,
     'pyramid' : True,
     'bigtiff' : True,
     'strip' : False,

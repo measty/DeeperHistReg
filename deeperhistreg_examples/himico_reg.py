@@ -4,22 +4,25 @@ This example shows how to run the nonrigid registration using the library instal
 import pathlib
 from typing import Union
 from pathlib import Path
+import argparse
+import os
 
 import deeperhistreg
 
-def run():
+def run_on_one(source_path: Union[str, pathlib.Path], target_path: Union[str, pathlib.Path], output_path: Union[str, pathlib.Path]):
     ### Define Inputs/Outputs ###
-    source_path : Union[str, pathlib.Path] = Path(r"/media/u2071810/Extra Data/HIMICO/slides/B-1989502_B11_HE.mrxs")
-    target_path : Union[str, pathlib.Path] = Path(r"/media/u2071810/Extra Data/HIMICO/slides/B-1989502_B11_HE_CDX2p_MUC2y_MUC5g_CD8dab.mrxs")
-    output_path : Union[str, pathlib.Path] = Path(r"/media/u2071810/Extra Data/HIMICO/Janssen/reg")
+    #source_path : Union[str, pathlib.Path] = Path(r"/media/u2071810/Extra Data/HIMICO/slides/B-1989502_B11_HE.mrxs")
+    #target_path : Union[str, pathlib.Path] = Path(r"/media/u2071810/Extra Data/HIMICO/slides/B-1989502_B11_HE_CDX2p_MUC2y_MUC5g_CD8dab.mrxs")
+    #output_path : Union[str, pathlib.Path] = Path(r"/media/u2071810/Extra Data/HIMICO/Janssen/reg")
 
     ### Define Params ###
     registration_params : dict = deeperhistreg.configs.default_nonrigid_high_resolution() # Alternative: # registration_params = deeperhistreg.configs.load_parameters(config_path) # To load config from JSON file
     save_displacement_field : bool = True # Whether to save the displacement field (e.g. for further landmarks/segmentation warping)
-    copy_target : bool = True # Whether to copy the target (e.g. to simplify the further analysis
-    delete_temporary_results : bool = False # Whether to keep the temporary results
+    copy_target : bool = False # Whether to copy the target (e.g. to simplify the further analysis
+    delete_temporary_results : bool = True # Whether to keep the temporary results
     case_name : str = "Example_Nonrigid" # Used only if the temporary_path is important, otherwise - provide whatever
-    temporary_path : Union[str, pathlib.Path] = output_path / "temp" # Will use default if set to None
+    output_folder = Path(output_path).parent
+    temporary_path : Union[str, pathlib.Path] = output_folder / "temp" # Will use default if set to None
 
     # modify defaults
     registration_params["loading_params"]['loader'] = 'openslide'
@@ -31,7 +34,7 @@ def run():
     config = dict()
     config['source_path'] = str(source_path)
     config['target_path'] = str(target_path)
-    config['output_path'] = output_path
+    config['output_path'] = output_folder
     config['registration_parameters'] = registration_params
     config['case_name'] = case_name
     config['save_displacement_field'] = save_displacement_field
@@ -41,6 +44,26 @@ def run():
     
     ### Run Registration ###
     deeperhistreg.run_registration(**config)
+    # rename output_folder/warped_source.tiff to output_path
+    os.rename(output_folder / "warped_source.tiff", output_path)
+    print(f"Saved registered image to {output_path}")
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser(description="DeeperHistReg arguments")
+    parser.add_argument('--source', type=str,
+                        help="Path to the source images")
+    parser.add_argument('--target', type=str,
+                        help="Path to the target images")
+    parser.add_argument('--output_folder', dest='output_folder', type=str, help="Path to the output folder")
+    args = parser.parse_args()
+    source_list = list(Path(args.source).parent.glob(Path(args.source).name))
+    target_list = list(Path(args.target).parent.glob(Path(args.target).name))
+    #source_list = args.source
+    #target_list = args.target
+    for source_path, target_path in zip(source_list, target_list):
+        print(f"Processing {source_path}")
+        output_path = Path(args.output_folder) / (Path(source_path).stem + "_reg.tiff")
+        if output_path.exists():
+            print(f"Output {output_path} already exists. Skipping.")
+            continue
+        run_on_one(Path(source_path), Path(target_path), output_path)
