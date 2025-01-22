@@ -19,10 +19,10 @@ def run_on_one(source_path: Union[str, pathlib.Path], target_path: Union[str, pa
     registration_params : dict = deeperhistreg.configs.default_nonrigid_high_resolution() # Alternative: # registration_params = deeperhistreg.configs.load_parameters(config_path) # To load config from JSON file
     save_displacement_field : bool = True # Whether to save the displacement field (e.g. for further landmarks/segmentation warping)
     copy_target : bool = False # Whether to copy the target (e.g. to simplify the further analysis
-    delete_temporary_results : bool = True # Whether to keep the temporary results
+    delete_temporary_results : bool = False # Whether to keep the temporary results
     case_name : str = "Example_Nonrigid" # Used only if the temporary_path is important, otherwise - provide whatever
     output_folder = Path(output_path).parent
-    temporary_path : Union[str, pathlib.Path] = output_folder / "temp" # Will use default if set to None
+    temporary_path : Union[str, pathlib.Path] = output_folder / "_temp2" # Will use default if set to None
 
     # modify defaults
     registration_params["loading_params"]['loader'] = 'openslide'
@@ -46,6 +46,7 @@ def run_on_one(source_path: Union[str, pathlib.Path], target_path: Union[str, pa
     deeperhistreg.run_registration(**config)
     # rename output_folder/warped_source.tiff to output_path
     os.rename(output_folder / "warped_source.tiff", output_path)
+    os.rename(output_folder / "displacement_field.mha", output_folder / (Path(output_path).stem + "_displacement_field.mha"))
     print(f"Saved registered image to {output_path}")
 
 if __name__ == "__main__":
@@ -56,8 +57,10 @@ if __name__ == "__main__":
                         help="Path to the target images")
     parser.add_argument('--output_folder', dest='output_folder', type=str, help="Path to the output folder")
     args = parser.parse_args()
-    source_list = list(Path(args.source).parent.glob(Path(args.source).name))
     target_list = list(Path(args.target).parent.glob(Path(args.target).name))
+    source_folder = Path(args.source).parent
+    #source_list = list(Path(args.source).parent.glob(Path(args.source).name))
+    source_list = [source_folder / p.stem(p.stem[:-2] + "CDX2p_MUC2y_MUC5g_CD8dab.mrxs") for p in target_list]
     #source_list = args.source
     #target_list = args.target
     for source_path, target_path in zip(source_list, target_list):
@@ -66,4 +69,8 @@ if __name__ == "__main__":
         if output_path.exists():
             print(f"Output {output_path} already exists. Skipping.")
             continue
-        run_on_one(Path(source_path), Path(target_path), output_path)
+        try:
+            run_on_one(Path(source_path), Path(target_path), output_path)
+        except Exception as e:
+            print(f"Failed to process {source_path}: {e}")
+            continue
