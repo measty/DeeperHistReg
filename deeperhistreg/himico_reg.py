@@ -16,7 +16,7 @@ def run_on_one(source_path: Union[str, pathlib.Path], target_path: Union[str, pa
     #output_path : Union[str, pathlib.Path] = Path(r"/media/u2071810/Extra Data/HIMICO/Janssen/reg")
 
     ### Define Params ###
-    registration_params : dict = deeperhistreg.configs.default_nonrigid_high_resolution() # Alternative: # registration_params = deeperhistreg.configs.load_parameters(config_path) # To load config from JSON file
+    registration_params : dict = deeperhistreg.configs.default_initial_nonrigid_high_resolution() # Alternative: # registration_params = deeperhistreg.configs.load_parameters(config_path) # To load config from JSON file
     save_displacement_field : bool = True # Whether to save the displacement field (e.g. for further landmarks/segmentation warping)
     copy_target : bool = False # Whether to copy the target (e.g. to simplify the further analysis
     delete_temporary_results : bool = False # Whether to keep the temporary results
@@ -57,14 +57,16 @@ if __name__ == "__main__":
                         help="Path to the target images")
     parser.add_argument('--output_folder', dest='output_folder', type=str, help="Path to the output folder")
     args = parser.parse_args()
+    source_suffix = Path(args.source).name[1:]
+    target_suffix = Path(args.target).name[1:]
     target_list = list(Path(args.target).parent.glob(Path(args.target).name))
     source_folder = Path(args.source).parent
     #source_list = list(Path(args.source).parent.glob(Path(args.source).name))
-    source_list = [source_folder / p.stem(p.stem[:-2] + "CDX2p_MUC2y_MUC5g_CD8dab.mrxs") for p in target_list]
+    source_list = [source_folder / p.name.replace(target_suffix, source_suffix) for p in target_list]
     #source_list = args.source
     #target_list = args.target
     for source_path, target_path in zip(source_list, target_list):
-        print(f"Processing {source_path}")
+        print(f"Registering {source_path} to {target_path}")
         output_path = Path(args.output_folder) / (Path(source_path).stem + "_reg.tiff")
         if output_path.exists():
             print(f"Output {output_path} already exists. Skipping.")
