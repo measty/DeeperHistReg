@@ -24,16 +24,17 @@ from dhr_utils import utils as u
 Possible compression: JPEG, DEFLATE, PACKBITS, CCITTFAX4, LZW, WEBP, ZSTD, JP2K
 """
 
+save_resolution = (0.2125, 0.2125) # microns per pixel
 default_params = {
     'compression' : 'jpeg', #'deflate', # "lzw" "jpeg"
-    'Q' : 75,
+    'Q' : 80,
     'pyramid' : True,
     'bigtiff' : True,
     'strip' : False,
     'tile': True,
-    #"xres":1000/save_resolution[0],
-    #"yres":1000/save_resolution[1], 
-    #"resunit": "cm", 
+    "xres":1000/save_resolution[0],
+    "yres":1000/save_resolution[1], 
+    "resunit": "cm", 
     "tile_width": 512, 
     "tile_height": 512,
     # 'depth' : pyvips.enums.ForeignDzDepth.ONETILE, 

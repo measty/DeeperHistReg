@@ -84,6 +84,8 @@ class PairFullSaver():
             else:
                 source_to_save = source
                 target_to_save = target
+        target = None
+        target_to_save = None
         self.saver.save(source_to_save, source_path, self.save_params)
         if not self.save_source_only:
             target_path = source_path.with_name("target.tiff")

@@ -25,10 +25,13 @@ def run_on_one(source_path: Union[str, pathlib.Path], target_path: Union[str, pa
     temporary_path : Union[str, pathlib.Path] = output_folder / "_temp2" # Will use default if set to None
 
     # modify defaults
-    registration_params["loading_params"]['loader'] = 'openslide'
-    registration_params["loading_params"]['source_resample_ratio'] = 0.05
-    registration_params["loading_params"]['target_resample_ratio'] = 0.05
+    registration_params["loading_params"]['loader'] = 'tiatoolbox' # 'openslide'
+    registration_params["loading_params"]['source_resample_ratio'] = 0.15
+    registration_params["loading_params"]['target_resample_ratio'] = 0.15
     registration_params["loading_params"]["final_level"] = 0
+    registration_params["initial_registration_params"]["registration_function"] = "instance_optimization_affine_registration" # multi_feature
+    registration_params["initial_registration_params"]["transform_type"] = "affine"
+    #registration_params["nonrigid_registration_params"]["registration_size"] = 10240
 
     ### Create Config ###
     config = dict()
