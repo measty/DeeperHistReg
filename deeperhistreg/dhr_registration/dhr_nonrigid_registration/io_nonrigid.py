@@ -58,13 +58,13 @@ def instance_optimization_nonrigid_registration(
     ### Nonrigid Registration ###
     if initial_displacement_field is None:
         initial_df = None
-        displacement_field = io.nonrigid_registration(resampled_source, resampled_target, num_levels, used_levels, iterations, learning_rates, alphas,
+        displacement_field, map = io.nonrigid_registration(resampled_source, resampled_target, num_levels, used_levels, iterations, learning_rates, alphas,
             cost_function, regularization_function, cost_function_params, regularization_function_params, initial_displacement_field=initial_df, device=device, echo=echo)
     else:
         initial_df = u.resample_displacement_field_to_size(initial_displacement_field, (resampled_source.size(2), resampled_source.size(3)))
         with tc.set_grad_enabled(False):
             warped_source = w.warp_tensor(resampled_source, initial_df, mode='bicubic')
-        displacement_field = io.nonrigid_registration(warped_source, resampled_target, num_levels, used_levels, iterations, learning_rates, alphas,
+        displacement_field, map = io.nonrigid_registration(warped_source, resampled_target, num_levels, used_levels, iterations, learning_rates, alphas,
             cost_function, regularization_function, cost_function_params, regularization_function_params, initial_displacement_field=None, device=device, echo=echo)
         displacement_field = w.compose_displacement_fields(initial_df, displacement_field)
 
@@ -73,7 +73,7 @@ def instance_optimization_nonrigid_registration(
     displacement_field = u.resample_displacement_field_to_size(displacement_field, (source.size(2), source.size(3)), mode='bicubic')
     if echo:
         print(f"Output displacement field size: {displacement_field.size()}")
-    return displacement_field
+    return displacement_field, map
 
 
 def instance_optimization_nonrigid_registration_lbfgs(

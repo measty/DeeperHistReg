@@ -1,6 +1,8 @@
 """register immuno with H&E"""
 from pathlib import Path
 import argparse
+import os
+os.environ['VIPS_CONCURRENCY'] = '4'
 from deeperhistreg.himico_reg import run_on_one
 
 immuno_mapping = {
@@ -50,11 +52,13 @@ if __name__ == "__main__":
     source_list.sort()
     print(f"Found {len(source_list)} images")
     print(f"images are: {source_list}")
+    spatial_base_path = Path("/mnt/lab-private-it-services/leuven/spatial_transcriptomics")
 
     for i, source in enumerate(source_list):
-        if source.name[0:6] != "IMU029":
+        if int(source.name[3:6]) != 11:
             continue
-        target = source.parent / source.name[0:6] / "morphology_focus" / "morphology_focus_0000.ome.tif" # dapi
+        #target = spatial_base_path / source.name[0:6] / "morphology_focus" / "morphology_focus_0000.ome.tif" # dapi
+        target = spatial_base_path / source.name[0:6] / "morphology_mip.ome.tif" # dapi
         if target is None:
             print(f"Target not found for {source} at {target}")
             break

@@ -5,6 +5,11 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "."))
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import pathlib
 from typing import Union, Iterable, Sequence, Tuple
+from PIL import Image
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from pathlib import Path
+from typing import Optional
 
 ### External Imports ###
 import math
@@ -14,13 +19,246 @@ import pyvips
 import torch as tc
 import torch.nn.functional as F
 import torchvision.transforms as tr
+from scipy.ndimage import median_filter, label, binary_dilation
+from scipy.sparse import diags, identity
+from scipy.sparse.linalg import cg
 
 
 ### Internal Imports ###
 
 
 
-########################
+def ring_median(img, r_out, r_in=0, mode="reflect"):
+    """
+    Median of pixels whose distance from the centre lies in (r_in, r_out].
+
+    Parameters
+    ----------
+    img   : 2-D array
+    r_out : int        outer radius  (≥1)
+    r_in  : int        inner radius  (≥0, < r_out)
+    mode  : str        ndimage border mode
+
+    Returns
+    -------
+    med   : 2-D array  same shape as img
+    """
+    if not (0 <= r_in < r_out):
+        raise ValueError("Require 0 ≤ r_in < r_out")
+
+    # build an (2*r_out+1)² binary mask with True in the annulus
+    y, x = np.ogrid[-r_out:r_out + 1, -r_out:r_out + 1]
+    d2 = x * x + y * y
+    mask = (d2 <= r_out * r_out) & (d2 > r_in * r_in)  # annulus
+
+    return median_filter(img, footprint=mask, mode=mode)
+
+def sanitize_displacement(field, *, k=1000.0, max_region=50_000,
+                           window=25, dilate=17,
+                           ds=16,               # <-- new: down-sample factor (int ≥ 1)
+                           tol=1e-5, maxiter=2000):
+    """
+    Removes small discontinuity blobs from a 2xHxW displacement field
+    using robust outlier detection on a down-sampled grid + Laplacian in-painting.
+
+    Parameters
+    ----------
+    field : np.ndarray, shape (2, H, W)
+    k : float
+        Outlier threshold in MAD units.
+    max_region : int
+        Max blob size (pixels @ full-res) to in-paint.
+    window : int
+        Median-filter size @ full-res (must be odd).  Internally shrunk to window//ds.
+    dilate : int
+        Extra dilation radius (pixels @ full-res).
+    ds : int
+        Spatial down-sample factor for mask creation (1 ⇒ original resolution).
+    tol, maxiter : float, int
+        Conjugate-gradient solver settings.
+
+    Returns
+    -------
+    clean : np.ndarray, same shape as `field`
+    """
+    if ds < 1 or not isinstance(ds, int):
+        raise ValueError("ds must be a positive integer")
+    u0, v0 = field[0,:,:], field[1,:,:]
+    H, W = u0.shape
+
+    # Down-sample for *mask* computation   (nearest-neighbour)
+    print("getting mask")
+    if ds > 1:
+        u_ds = u0[::ds, ::ds]
+        v_ds = v0[::ds, ::ds]
+        win_ds = window # max(3, (window // ds) | 1)        # ensure odd and ≥3
+    else:
+        u_ds, v_ds, win_ds = u0, v0, window
+
+    # robust local median / MAD on coarse grid
+
+    # Choose radii (full-res) then scale to coarse grid
+    r_out = window         
+    r_in  = int(window /2)                   # ignore centre ± 1 px
+    #r_out = max(1, r_out_full // ds)
+    #r_in  = max(0, r_in_full  // ds)
+
+    u_med = ring_median(u_ds, r_out, r_in)
+    v_med = ring_median(v_ds, r_out, r_in)
+    #u_med = median_filter(u_ds, size=win_ds, mode='reflect')
+    #v_med = median_filter(v_ds, size=win_ds, mode='reflect')
+    #mad_u = median_filter(np.abs(u_ds - u_med), size=win_ds, mode='reflect')
+    #mad_v = median_filter(np.abs(v_ds - v_med), size=win_ds, mode='reflect')
+    mad = 1 # mad_u + mad_v + 1e-12
+
+    outlier_ds = ((np.abs(u_ds - u_med) + np.abs(v_ds - v_med)) / mad) > k
+
+    # keep small connected components
+    structure = np.ones((3, 3), dtype=bool)         # 8-connectivity
+    lab, nlab = label(outlier_ds, structure)
+    mask_ds = np.zeros_like(outlier_ds, dtype=bool)
+    px_per_blob_limit = max_region # // (ds * ds)
+    for n in range(1, nlab + 1):
+        if (lab == n).sum() <= px_per_blob_limit:
+            mask_ds[lab == n] = True
+
+    # upsample mask back to full resolution (nearest-neighbour)
+    if ds > 1:
+        mask_full = np.kron(mask_ds, np.ones((ds, ds), dtype=bool))
+        mask_full = mask_full[:H, :W]               # trim edge padding
+    else:
+        mask_full = mask_ds
+
+    # optional dilation on full-res mask
+    if dilate > 0:
+        mask_full = binary_dilation(mask_full, iterations=dilate)
+
+    if not mask_full.any():
+        return field.copy()
+
+    # Poisson in-painting
+    print("inpainting")
+    clean = field.copy()
+    N = H * W
+    main = np.ones(N) * 4
+    off1 = np.ones(N - 1) * -1
+    off1[np.arange(1, N) % W == 0] = 0
+    offW = np.ones(N - W) * -1
+    L = diags([main, off1, off1, offW, offW],
+              [0, -1, +1, -W, +W], format='csr')
+
+    for c in range(2):
+        vec = field[c, :,:].ravel()
+        known = ~mask_full.ravel()
+        A = L[mask_full.ravel()][:, mask_full.ravel()]
+        b = -L[mask_full.ravel()][:, known] @ vec[known]
+        x, info = cg(A, b, rtol=tol, maxiter=maxiter)
+        if info != 0:
+            print(f"Warning: CG did not converge (info={info})")
+        vec_out = vec.copy()
+        vec_out[mask_full.ravel()] = x
+        clean[c, :,:] = vec_out.reshape(H, W)
+
+    return clean
+
+def save_ncc_heatmap_image(
+    ncc_map: tc.Tensor,
+    save_path: Union[str, Path],
+    colormap: str = "viridis",
+    slice_idx: Optional[int] = None,
+    projection_axis: Optional[int] = None,
+    normalize: bool = True,
+    invert: bool = False,
+    percentile_range: tuple = (2, 96),
+    padding_params: dict = None
+) -> None:
+    """
+    Save NCC quality map as a simple PNG heatmap image without axes or labels.
+    
+    Parameters
+    ----------
+    ncc_map : tc.Tensor
+        The NCC quality map tensor returned from ncc_local function
+        Expected shape: (B, 1, H, W) for 2D or (B, 1, D, H, W) for 3D
+    save_path : str or Path
+        Path where to save the PNG file
+    colormap : str, default="viridis"
+        Matplotlib colormap name (e.g., 'viridis', 'hot', 'jet', 'plasma', 'coolwarm')
+    slice_idx : int, optional
+        For 3D data, which slice to visualize (along depth dimension)
+        If None, uses middle slice
+    projection_axis : int, optional
+        For 3D data, axis along which to do max projection
+        If provided, overrides slice_idx. 0=depth, 1=height, 2=width
+    normalize : bool, default=True
+        Whether to normalize values to [0, 1] range before applying colormap
+    invert : bool, default=False
+        Whether to invert the colormap (useful if higher NCC values should be darker)
+    percentile_range : tuple, default=(2, 96)
+        Percentile range to use for normalization.
+        Values outside this range will be clipped to 0 or 1.
+    """
+
+    # Convert to numpy and remove batch/channel dimensions
+    if isinstance(ncc_map, tc.Tensor):
+        ncc_array = ncc_map.detach().cpu().numpy()
+    else:
+        ncc_array = ncc_map
+    
+    # Handle batch dimension - take first batch
+    if len(ncc_array.shape) >= 3:
+        ncc_array = ncc_array[0]  # Remove batch dimension
+    
+    # Handle channel dimension if present
+    if len(ncc_array.shape) >= 3 and ncc_array.shape[0] == 1:
+        ncc_array = ncc_array[0]  # Remove channel dimension
+    
+    # Handle 3D data
+    if len(ncc_array.shape) == 3:
+        if projection_axis is not None:
+            # Max projection along specified axis
+            ncc_array = np.max(ncc_array, axis=projection_axis)
+        else:
+            # Take a slice
+            if slice_idx is None:
+                slice_idx = ncc_array.shape[0] // 2  # Middle slice
+            ncc_array = ncc_array[slice_idx]
+    
+    # Ensure we have 2D data at this point
+    if len(ncc_array.shape) != 2:
+        raise ValueError(f"Expected 2D array after processing, got shape {ncc_array.shape}")
+    
+    # Robust normalization using percentiles to avoid outlier distortion
+    if normalize:
+        ncc_p_low = np.percentile(ncc_array, percentile_range[0])
+        ncc_p_high = np.percentile(ncc_array, percentile_range[1])
+        if ncc_p_high > ncc_p_low:
+            ncc_array = (ncc_array - ncc_p_low) / (ncc_p_high - ncc_p_low)
+            # Clip values outside [0, 1] range
+            ncc_array = np.clip(ncc_array, 0, 1)
+        else:
+            ncc_array = np.zeros_like(ncc_array)
+    
+    # Invert if requested
+    if invert:
+        ncc_array = 1.0 - ncc_array
+    
+    # Apply colormap
+    cmap = cm.get_cmap(colormap)
+    colored_array = cmap(ncc_array)  # Returns RGBA values in [0, 1]
+    
+    # Convert to 8-bit RGB
+    rgb_array = (colored_array[:, :, :3] * 255).astype(np.uint8)
+    
+    # Convert to PIL Image and save
+    image = Image.fromarray(rgb_array)
+    image.save(save_path)
+    
+    print(f"NCC heatmap image saved to: {save_path}")
+    print(f"Image size: {image.size}")
+    if normalize:
+        print(f"Normalized using {percentile_range[0]}th-{percentile_range[1]}th percentile range: [{ncc_p_low:.3f}, {ncc_p_high:.3f}]")
+
 
 def normalize(tensor : Union[tc.Tensor, np.ndarray]) -> Union[tc.Tensor, np.ndarray]:
     """

@@ -19,8 +19,8 @@ from dhr_building_blocks import instance_optimization as io
 def instance_optimization_affine_registration(
     source : tc.Tensor,
     target : tc.Tensor,
-    initial_transform : Union[tc.Tensor, None],
-    params : dict) -> tc.Tensor:
+    params : dict,
+    initial_transform : Union[tc.Tensor, None] = None) -> tc.Tensor:
     """
     TODO
     """

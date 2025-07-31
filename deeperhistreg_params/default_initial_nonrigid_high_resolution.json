@@ -50,7 +50,7 @@
         "match_threshold": 0.3,
         "sinkhorn_iterations": 50,
         "show": false,
-        "angle_step": 60,
+        "angle_step": 30,
         "cuda": true,
         "device": "cuda:0",
         "echo": false,
@@ -80,9 +80,9 @@
             100,
             100,
             100,
-            100,
+            150,
             200,
-            200
+            250
         ],
         "learning_rates": [
             0.005,

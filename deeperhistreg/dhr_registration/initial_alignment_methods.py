@@ -109,9 +109,9 @@ def multi_feature(
 def instance_optimization_affine_registration(
     source : tc.Tensor,
     target : tc.Tensor,
-    initial_displacement_field : Union[tc.Tensor, None],
-    params : dict) -> tc.Tensor:
-    return ioa.instance_optimization_affine_registration(source, target, initial_displacement_field, params)
+    params : dict,
+    initial_displacement_field : Union[tc.Tensor, None] = None) -> tc.Tensor:
+    return ioa.instance_optimization_affine_registration(source, target, params, initial_displacement_field)
 
 def get_function(function_name : str) -> Callable:
     return getattr(current_file, function_name)

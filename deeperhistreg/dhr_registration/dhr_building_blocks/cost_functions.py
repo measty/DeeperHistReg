@@ -24,6 +24,7 @@ def ncc_local(
     sources: tc.Tensor,
     targets: tc.Tensor,
     device: Union[str, tc.device, None]=None,
+    return_map: bool=False,
     **params : dict) -> tc.Tensor:
     """
     Local normalized cross-correlation (as cost function) using PyTorch tensors.
@@ -86,6 +87,8 @@ def ncc_local(
     sources_var = sources_denom_sum - 2 * u_sources * sources_sum + u_sources * u_sources * size
     targets_var = targets_denom_sum - 2 * u_targets * targets_sum + u_targets * u_targets * size
     ncc = cross * cross / (sources_var * targets_var + 1e-5)
+    if return_map:
+        return -tc.mean(ncc), -ncc
     return -tc.mean(ncc)
 
 def sparse_ncc(

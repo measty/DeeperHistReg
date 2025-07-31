@@ -14,6 +14,7 @@ import torch as tc
 
 ### Internal Imports ###
 from dhr_preprocessing import preprocessing as pre
+from dhr_postprocessing import postprocessing as pp
 from dhr_registration import initial_alignment_methods as ia
 from dhr_registration import nonrigid_registration_methods as nr
 from dhr_deformation import apply_deformation as adf
@@ -66,6 +67,7 @@ class DeeperHistReg_FullResolution():
             self.logger = logging.getLogger(self.case_name)
             self.logger.setLevel(logging.DEBUG)
             self.logger.addHandler(logging.FileHandler(self.logging_path))
+        self.logger.info(f"DHR Pipeline initialized using parameters: {self.registration_parameters}")
 
     def load_images(self) -> None:
         """
@@ -112,6 +114,7 @@ class DeeperHistReg_FullResolution():
                 self.logger.info(f"Preprocessed target shape: {self.pre_target.shape}")
                 self.logger.info(f"Preprocessing time: {self.preprocessing_time} seconds.")
             self.current_displacement_field = u.create_identity_displacement_field(self.pre_source)
+            self.postprocessing_params["padding_params"] = self.padding_params
             tc.cuda.empty_cache()
 
     def save_preprocessing(self) -> None:
@@ -188,7 +191,7 @@ class DeeperHistReg_FullResolution():
             b_t = time.time()
             nonrigid_registration_params = self.registration_parameters['nonrigid_registration_params']
             nonrigid_registration_function = nr.get_function(nonrigid_registration_params['nonrigid_registration_function'])
-            self.nonrigid_displacement_field = nonrigid_registration_function(self.pre_source, self.pre_target, self.current_displacement_field, nonrigid_registration_params)
+            self.nonrigid_displacement_field, self.quality_map = nonrigid_registration_function(self.pre_source, self.pre_target, self.current_displacement_field, nonrigid_registration_params)
             e_t = time.time()
             self.nonrigid_registration_time = e_t - b_t
             if self.logging_path is not None:
@@ -240,7 +243,33 @@ class DeeperHistReg_FullResolution():
         TODO
         """
         self.run_nonrigid_registration()
+        self.clean_df()
         self.save_nonrigid_registration()
+
+    def clean_df(self) -> None:
+        """
+        TODO
+        """
+        self.logger.info(f"Cleaning displacement field: shape {self.current_displacement_field.shape}")
+        np_disp_field = self.current_displacement_field.detach().clone().cpu()[0].permute(2, 0, 1).numpy()
+        np_disp_field = u.sanitize_displacement(np_disp_field, k=1000.0 / (0.5 * (np_disp_field.shape[1] + np_disp_field.shape[2])))
+        self.current_displacement_field = tc.from_numpy(np_disp_field).to(self.device).permute(1, 2, 0).unsqueeze(0)
+        self.nonrigid_displacement_field = self.current_displacement_field
+
+    def save_quality_maps(self) -> None:
+        """
+        TODO
+        """
+        save_quality_maps = self.registration_parameters['save_quality_maps']
+        self.logger.info(f"Saving quality maps: {save_quality_maps}")
+        if save_quality_maps:
+            self.logger.info(f"Initial Quality map shape: {self.quality_map.shape}")
+            #self.quality_map = pp.revert_basic_preprocessing_on_displacement_field(self.quality_map, self.postprocessing_params)
+            self.quality_map = u.crop_to_template(self.quality_map, self.pre_target)
+            self.quality_map, _ = u.unpad(self.quality_map, self.target, self.padding_params, True)
+            self.logger.info(f"Saving final quality map of shape: {self.quality_map.shape}")
+            u.save_ncc_heatmap_image(self.quality_map, self.save_path / self.case_name / "quality_map.png")
+            self.logger.info(f"Quality map saved.")
 
     def save_final(self) -> None:
         """
@@ -298,6 +327,7 @@ class DeeperHistReg_FullResolution():
         self.preprocessing()
         self.initial_registration()
         self.nonrigid_registration()
+        self.save_quality_maps()
         e_t = time.time()
         self.total_registration_time = e_t - b_t
         if self.logging_path is not None:

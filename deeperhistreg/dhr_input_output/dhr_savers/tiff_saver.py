@@ -23,7 +23,7 @@ from dhr_utils import utils as u
 """
 Possible compression: JPEG, DEFLATE, PACKBITS, CCITTFAX4, LZW, WEBP, ZSTD, JP2K
 """
-
+pyvips.cache_set_max(100) #added
 save_resolution = (0.2125, 0.2125) # microns per pixel
 default_params = {
     'compression' : 'jpeg', #'deflate', # "lzw" "jpeg"

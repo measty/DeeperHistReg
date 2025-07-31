@@ -194,7 +194,7 @@ def nonrigid_registration(
                     if echo:
                         print(f"Initial cost: {cost_function(current_source, current_target, device=device, **cost_function_params)}")
                         print(f"First warp cost: {cost_function(warped_source, current_target, device=device, **cost_function_params)}")
-                cost = cost_function(warped_source, current_target, device=device, **cost_function_params)   
+                cost, map = cost_function(warped_source, current_target, device=device, **cost_function_params)   
                 reg = regularization_function(displacement_field, device=device, **regularization_function_params)
                 loss = cost + alphas[j]*reg
                 if penalty_function is not None:
@@ -204,9 +204,10 @@ def nonrigid_registration(
             optimizer.zero_grad()
             if echo:
                 print("Iter: ", i, "Current cost: ", cost.item(), "Current reg: ", reg.item(), "Current loss: ", loss.item())
+    
     if used_levels != num_levels:
         displacement_field = u.resample_displacement_field_to_size(displacement_field, (source.size(2), source.size(3)))
-    return displacement_field
+    return displacement_field, map
 
 
 def bsplines_registration(

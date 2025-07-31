@@ -1,16 +1,17 @@
 ### Ecosystem Imports ###
-import os
+import tempfile, os, weakref
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "."))
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from typing import Union, Iterable
 import logging
-from tiatoolbox.wsicore.wsireader import WSIReader
+from tiatoolbox.wsicore.wsireader import WSIReader, TIFFWSIReader
 
 ### External Imports ###
 import numpy as np
 import torch as tc
 import cv2
+from pathlib import Path
 
 import pyvips
 
@@ -57,10 +58,35 @@ class TTBSlideLoader(WSILoader):
         """
         self.image_path = image_path
         self.mode = mode
-        self.image = WSIReader.open(image_path)
+        if Path(image_path).suffix.lower() in [".tiff", ".tif"]:
+            self.image = TIFFWSIReader(image_path)
+        else:
+            self.image = WSIReader.open(image_path)
+        self._set_reader_to_dapi()
         self.num_levels = self.get_num_levels()
         self.resolutions = self.get_resolutions()
         self.bands = 3 # fix me
+
+    def _make_memmap(
+        self,
+        shape: tuple[int, ...],
+        dtype: np.dtype,
+    ) -> np.memmap:
+        """
+        Create an on-disk memmap in `memmap_dir` (default: system temp dir)
+        that will be automatically deleted when the memmap object is GC’ed.
+        """
+        # 1. Reserve a file name
+        fd, fname = tempfile.mkstemp(suffix=".npy", dir="/mnt/lab-temp-it-services/migratory/u2071810/temp")
+        os.close(fd)                       # We only needed the name; close the OS handle.
+
+        # 2. Allocate the memmap
+        mm = np.memmap(fname, dtype=dtype, mode="w+", shape=shape)
+
+        # 3. Make sure the file disappears when the ndarray is garbage-collected
+        weakref.finalize(mm, lambda p=fname: os.remove(p) if os.path.exists(p) else None)
+
+        return mm
         
     def get_num_levels(self) -> int:
         """
@@ -162,19 +188,67 @@ class TTBSlideLoader(WSILoader):
             raise ValueError("Unsupported mode.")
         return array
 
-    def load_level(self, level) -> Union[np.ndarray, tc.Tensor, pyvips.Image]:
+    def load_level(self, level, use_memmap=True) -> Union[np.ndarray, tc.Tensor, pyvips.Image]:
         """
         TODO - documentation
         """
-        image = self.image.read_rect((0, 0), self.resolutions[level], level, coord_space='resolution')
+        self._set_reader_to_all_channels()
+        if use_memmap:
+            img_np = self.image.read_rect(
+                (0, 0), self.resolutions[level], level, coord_space="resolution"
+            )
+            image = self._make_memmap(img_np.shape, img_np.dtype)
+            image[:] = img_np          # copy once, then the big in-RAM array can disappear
+            image.flush()              # ensure data is on disk
+            del img_np              # let the GC free the large RAM buffer
+        else:
+            image = self.image.read_rect((0, 0), self.resolutions[level], level, coord_space='resolution')
+
         if self.mode == LoadMode.NUMPY:
             array = image
         elif self.mode == LoadMode.PYTORCH:
             array = u.image_to_tensor(image)
         elif self.mode == LoadMode.PYVIPS:
-            array = pyvips.Image.new_from_array(image)[0:3]
+            if use_memmap:
+                height, width = image.shape[:2]
+                bands = image.shape[2] if image.ndim == 3 else 1
+                array = pyvips.Image.new_from_memory(
+                    image, width, height, bands, 'uchar'
+                )
+            else:
+                array = pyvips.Image.new_from_array(image)[0:3]
         else:
             raise ValueError("Unsupported mode.")
+        self._set_reader_to_dapi()
         return array
+    
+    def _set_reader_to_dapi(self):
+        """
+        TODO - documentation
+        """
+        n_channels = 0
+        if self.image.post_proc is not None:
+            if self.image.post_proc.color_dict is not None:
+                n_channels = len(self.image.post_proc.color_dict)
+            if self.image.post_proc is not None and n_channels > 4:
+                dapi_index = list(self.image.post_proc.color_dict.keys()).index("DAPI")
+                self.image.post_proc.channels = [dapi_index]
+                # set color of dapi channel to white
+                self.orig_dapi_color = self.image.post_proc.color_dict["DAPI"]
+                self.image.post_proc.color_dict["DAPI"] = (1.0, 1.0, 1.0)
+                self.image.post_proc.colors[dapi_index] = np.array((1.0, 1.0, 1.0))
 
+    def _set_reader_to_all_channels(self):
+        """
+        TODO - documentation
+        """
+        n_channels = 0
+        if self.image.post_proc is not None:
+            if self.image.post_proc.color_dict is not None:
+                n_channels = len(self.image.post_proc.color_dict)
+            if self.image.post_proc is not None and n_channels > 4:
+                dapi_index = list(self.image.post_proc.color_dict.keys()).index("DAPI")
+                self.image.post_proc.channels = list(range(len(self.image.post_proc.color_dict)))
+                self.image.post_proc.color_dict["DAPI"] = self.orig_dapi_color
+                self.image.post_proc.colors[dapi_index, :] = np.array(self.orig_dapi_color)
     

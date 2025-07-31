@@ -40,11 +40,11 @@ def revert_basic_preprocessing_on_displacement_field(displacement_field : Union[
     TODO - documentation
     """
     original_size = postprocessing_params['original_size']
-    late_resample = postprocessing_params['late_resample']
+    late_resample = postprocessing_params.get('late_resample', False)
     if late_resample:
         late_resample_ratio = postprocessing_params['late_resample_ratio']
         displacement_field = u.resample_displacement_field(displacement_field, 1 / late_resample_ratio)
-    pad_to_same_size = postprocessing_params['pad_to_same_size']
+    pad_to_same_size = postprocessing_params.get('pad_to_same_size', True)
     if pad_to_same_size:
         padding_params = postprocessing_params['padding_params']
         displacement_field = u.unpad_displacement_field(displacement_field, padding_params)
@@ -52,7 +52,7 @@ def revert_basic_preprocessing_on_displacement_field(displacement_field : Union[
     if initial_resampling:
         initial_resample_ratio = postprocessing_params['initial_resample_ratio']
         displacement_field = u.resample_displacement_field(displacement_field, 1 / initial_resample_ratio)
-    current_size = displacement_field.shape[1:] if isinstance(displacement_field, np.ndarray) else (displacement_field.size(1), displacement_field.size(2))
+    current_size = displacement_field.shape[1:] if isinstance(displacement_field, np.ndarray) else (displacement_field.size(2), displacement_field.size(3))
     if current_size != original_size:
         print("Incorrect size during postprocessing.")
         displacement_field = u.resample_displacement_field_to_size(displacement_field, original_size)
