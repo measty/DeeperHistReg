@@ -71,7 +71,7 @@ def run_on_one(source_path: Union[str, pathlib.Path], target_path: Union[str, pa
     registration_params["loading_params"]['source_resample_ratio'] = 0.14
     registration_params["loading_params"]['target_resample_ratio'] = 0.14
     registration_params["loading_params"]["final_level"] = 0
-    registration_params["initial_registration_params"]["initial_registration_function"] = "multi_feature" #"instance_optimization_affine_registration" # multi_feature
+    registration_params["initial_registration_params"]["initial_registration_function"] = "multi_feature" # "instance_optimization_affine_registration" # multi_feature
     registration_params["initial_registration_params"]["transform_type"] = "affine"
     registration_params['save_final_displacement_field'] = save_displacement_field
     registration_params["save_final_images"] = save_final_images
